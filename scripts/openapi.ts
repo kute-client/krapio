@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createGenerator } from "ts-json-schema-generator";
 import ts from "typescript";
-import { GAPI_URL, LEGACY_API_URL, MATCHMAKER_URL } from "../src/index.js";
+import { APP_SCOPES, GAPI_URL, LEGACY_API_URL, MATCHMAKER_URL, OAUTH_AUTHORIZE_URL } from "../src/index.js";
 
 // ========================= //
 // = Copyright (c) NullDev = //
@@ -46,9 +46,14 @@ type Operation = {
     summary: string;
     description: string;
     host: string;
+    /** the oauth scope the endpoint needs, app tier only */
+    scope?: string;
 };
 
-type Tier = "developer" | "game" | "token";
+type Tier = "developer" | "game" | "token" | "app";
+
+/** `GET /path (scope), ` at the start of a method's JSDoc */
+const DOC_PREFIX = /^(GET|POST) \S+(?: \(([a-z:]+)\))?,?\s*/;
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string; homepage: string };
@@ -81,6 +86,37 @@ const TIERS: Record<Tier, { title: string; dir: string; accessor: string; securi
         doc: "token-api.md",
         error: { $ref: "#/components/schemas/EnvelopeError" },
     },
+    app: {
+        title: "App API",
+        dir: "src/app/resources",
+        accessor: "krunker.app(accessToken)",
+        security: [{ appOAuth: ["profile"] }],
+        hosts: {},
+        doc: "app-api.md",
+        error: { $ref: "#/components/schemas/AppErrorBody" },
+    },
+};
+
+/** what each scope of Login with Krunker allows, for the security scheme */
+const SCOPE_NOTES: Record<typeof APP_SCOPES[number], string> = {
+    profile: "the player's subject id, name, level, clan tag and premium/verified flags; always granted",
+    "stats:read": "lifetime stats, ranked profile per region and season, challenge progress",
+    "notifications:read": "Krunker Mail and system notices",
+    "inventory:read": "items and currency balances",
+    "inventory:write:skins": "quick-sell, paint, style and lock items",
+    "inventory:write:currency": "send KR to another player",
+    "inventory:write": "both inventory write scopes",
+    "trades:read": "open and completed trades, trade count",
+    "trades:write": "create, accept, cancel and decline trades",
+    "market:read": "the player's own listings and market history",
+    "market:write": "list, unlist and buy on the market",
+    "friends:read": "following and followers, with online status",
+    "friends:write": "follow and unfollow players",
+    "dms:read": "direct message conversations and messages",
+    "dms:write": "send DMs to the player's friends",
+    "clan:read": "the player's clan, its members and join applications",
+    "maps:read": "the player's published maps and their stats",
+    "events:subscribe": "receive webhooks about the player",
 };
 
 const warnings: string[] = [];
@@ -94,7 +130,7 @@ const configFile = ts.readConfigFile(join(root, "tsconfig.json"), ts.sys.readFil
 const config = ts.parseJsonConfigFileContent(configFile.config, ts.sys, root);
 const resourceFiles = (Object.keys(TIERS) as Tier[]).flatMap((tier) =>
     readdirSync(join(root, TIERS[tier].dir)).filter((f) => f.endsWith(".ts")).map((f) => join(root, TIERS[tier].dir, f)));
-const indexFiles = (["developer", "game", "token"] as const).map((tier) => join(root, "src", tier, "index.ts"));
+const indexFiles = (["developer", "game", "token", "app"] as const).map((tier) => join(root, "src", tier, "index.ts"));
 const program = ts.createProgram([...resourceFiles, ...indexFiles], config.options);
 const checker = program.getTypeChecker();
 
@@ -148,6 +184,19 @@ function schemaOfTypeNode(node: ts.TypeNode): Json {
                 description: "gapi wraps every reply in {data, error}",
                 properties: { data: schemaOfTypeNode(node.typeArguments[0]), error: { type: "null" } },
                 required: ["data", "error"],
+            };
+        }
+        if (name === "AppReply" && node.typeArguments?.[0]){
+            return { type: "object", properties: { data: schemaOfTypeNode(node.typeArguments[0]) }, required: ["data"] };
+        }
+        if (name === "AppPage" && node.typeArguments?.[0]){
+            return {
+                type: "object",
+                properties: {
+                    data: { type: "array", items: schemaOfTypeNode(node.typeArguments[0]) },
+                    next_cursor: { type: "string", description: "opaque, pass it back as `cursor`; absent on the last page" },
+                },
+                required: ["data"],
             };
         }
         if (name === "Record" && node.typeArguments?.[1]){
@@ -268,6 +317,7 @@ const CHECKS: Record<string, (args: readonly ts.Expression[]) => { schema: Json;
     "int": (args) => ({ schema: intSchema(args[2], args[3]) }),
     text: () => ({ schema: { type: "string", minLength: 1 } }),
     name: () => ({ schema: { type: "string", minLength: 1 } }),
+    opaque: () => ({ schema: { type: "string", minLength: 1 } }),
     id: () => ({ schema: { type: "string", pattern: "^[0-9]+$", description: "an integer id, passed as a string because it can exceed 2^53" } }),
     month: () => ({ schema: { type: "string", pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$", example: "2026-10" } }),
     list: () => ({ schema: { type: "array", items: { type: "integer" } }, required: false, style: true }),
@@ -491,7 +541,7 @@ function collectOperations(): Operation[] {
                     const response = typeArg ? schemaOfTypeNode(typeArg) : {};
                     if (!typeArg) warn(`${className}.${member.name.getText()}: no response type`);
                     const doc = jsDocOf(member);
-                    const summary = doc.replace(/^(GET|POST) \S+,?\s*/, "").split(/(?<=[a-z0-9)])[;.] /)[0]?.trim() ?? "";
+                    const summary = doc.replace(DOC_PREFIX, "").split(/(?<=[a-z0-9)])[;.] /)[0]?.trim() ?? "";
                     operations.push({
                         tier,
                         file,
@@ -505,6 +555,7 @@ function collectOperations(): Operation[] {
                         summary,
                         description: doc,
                         host: hosts[file] ?? GAPI_URL,
+                        scope: tier === "app" ? doc.match(DOC_PREFIX)?.[2] : undefined,
                     });
                 }
             }
@@ -609,7 +660,7 @@ function buildSchemas(): Json {
         skipTypeCheck: true,
     });
     const schemas: Json = {};
-    const pending = [...neededTypes, "ApiErrorBody"];
+    const pending = [...neededTypes, "ApiErrorBody", "AppErrorBody"];
     const seen = new Set<string>();
     while (pending.length){
         const name = pending.pop()!;
@@ -720,7 +771,7 @@ export function buildSpec(): { spec: Json; warnings: string[] } {
                 label: "krapio",
                 source: `import { Krunker } from "krapio";\n\nconst krunker = ${setup};\nconst ${op.method} = await ${tier.accessor}.${accessor}.${op.call};\n`,
             };
-            const description = section?.prose || op.description.replace(/^(GET|POST) \S+,?\s*/, "");
+            const description = section?.prose || op.description.replace(DOC_PREFIX, "");
             const item = (paths[variant.text] ??= {}) as Json;
             if (item.get){
                 // two methods read the same path with different filters (players.feed and social.feed): one operation on both pages, with both filters
@@ -748,7 +799,8 @@ export function buildSpec(): { spec: Json; warnings: string[] } {
                 "x-krapio": library,
                 "x-routes": [op.route],
                 "x-codeSamples": [sample],
-                security: tier.security,
+                // an app endpoint without a scope of its own takes any valid token
+                security: op.tier === "app" ? [{ appOAuth: op.scope ? [op.scope] : [] }] : tier.security,
                 parameters,
                 responses: {
                     200: { description: "OK", content: { "application/json": { schema: op.response, ...section?.example === undefined ? {} : { example: section.example } } } },
@@ -787,8 +839,8 @@ export function buildSpec(): { spec: Json; warnings: string[] } {
         info: {
             title: "Krunker API",
             version: pkg.version,
-            summary: "The Krunker.io developer API, the game's public endpoints and the token bound ones, as krapio wraps them",
-            description: `Generated from the krapio source and docs. The developer API is the official one from FRVR and needs an API key; the game and token tiers are the endpoints the game itself reads, documented from observation. Full docs: ${pkg.homepage.replace(/#.*/, "")}`,
+            summary: "The Krunker.io developer API, the game's public endpoints, the token bound ones and the reads of Login with Krunker's app API, as krapio wraps them",
+            description: `Generated from the krapio source and docs. The developer API is the official one from FRVR and needs an API key; the game and token tiers are the endpoints the game itself reads, documented from observation; the app API is the official one behind Login with Krunker (OAuth 2.0), of which only the reads are listed. Full docs: ${pkg.homepage.replace(/#.*/, "")}`,
             license: { name: "MIT", identifier: "MIT" },
         },
         servers: [
@@ -803,6 +855,18 @@ export function buildSpec(): { spec: Json; warnings: string[] } {
             securitySchemes: {
                 developerApiKey: { type: "apiKey", "in": "header", name: "X-Developer-API-Key", description: "developer API key (starts with kr_)" },
                 accessToken: { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "the player's FRVR access token" },
+                appOAuth: {
+                    type: "oauth2",
+                    description: "Login with Krunker: authorization code flow with PKCE (S256); the access token (kat_...) goes in the Authorization header as a bearer",
+                    flows: {
+                        authorizationCode: {
+                            authorizationUrl: OAUTH_AUTHORIZE_URL,
+                            tokenUrl: `${GAPI_URL}/oauth/token`,
+                            refreshUrl: `${GAPI_URL}/oauth/token`,
+                            scopes: Object.fromEntries(APP_SCOPES.map((scope) => [scope, SCOPE_NOTES[scope]])),
+                        },
+                    },
+                },
             },
             schemas,
         },

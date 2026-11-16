@@ -3,8 +3,8 @@
   "info": {
     "title": "Krunker API",
     "version": "0.1.5",
-    "summary": "The Krunker.io developer API, the game's public endpoints and the token bound ones, as krapio wraps them",
-    "description": "Generated from the krapio source and docs. The developer API is the official one from FRVR and needs an API key; the game and token tiers are the endpoints the game itself reads, documented from observation. Full docs: https://github.com/NullDev/krapio",
+    "summary": "The Krunker.io developer API, the game's public endpoints, the token bound ones and the reads of Login with Krunker's app API, as krapio wraps them",
+    "description": "Generated from the krapio source and docs. The developer API is the official one from FRVR and needs an API key; the game and token tiers are the endpoints the game itself reads, documented from observation; the app API is the official one behind Login with Krunker (OAuth 2.0), of which only the reads are listed. Full docs: https://github.com/NullDev/krapio",
     "license": {
       "name": "MIT",
       "identifier": "MIT"
@@ -164,6 +164,61 @@
       "name": "token/ranked",
       "x-displayName": "Ranked",
       "description": "`https://api.krunker.io`, the ranked system's own API. Every call answers 401 `Access token required` without a token, including the public leaderboard."
+    },
+    {
+      "name": "app/player",
+      "x-displayName": "The Player",
+      "description": "Scope `profile`, which every token has."
+    },
+    {
+      "name": "app/stats",
+      "x-displayName": "Stats",
+      "description": "Scope `stats:read`."
+    },
+    {
+      "name": "app/inventory",
+      "x-displayName": "Inventory",
+      "description": "Scope `inventory:read`."
+    },
+    {
+      "name": "app/trades",
+      "x-displayName": "Trades",
+      "description": "Scope `trades:read`. Creating, accepting and cancelling are [writes](#trades-tradeswrite) and are not in krapio."
+    },
+    {
+      "name": "app/market",
+      "x-displayName": "Market",
+      "description": "Scope `market:read`. Only the player's own market data. Public market data (listings, prices) is on the public market endpoints of the [game API](game-api.md#market) and needs no scope."
+    },
+    {
+      "name": "app/friends",
+      "x-displayName": "Friends",
+      "description": "Scope `friends:read`."
+    },
+    {
+      "name": "app/maps",
+      "x-displayName": "Maps",
+      "description": "Scope `maps:read`."
+    },
+    {
+      "name": "app/clan",
+      "x-displayName": "Clan",
+      "description": "Scope `clan:read`."
+    },
+    {
+      "name": "app/notifications",
+      "x-displayName": "Notifications",
+      "description": "Scope `notifications:read`."
+    },
+    {
+      "name": "app/dms",
+      "x-displayName": "Direct Messages",
+      "description": "Scopes: `dms:read` to read conversations and messages, `dms:write` to send as the player (it includes `dms:read`). Krunker keeps DMs for 30 days. Messages sent through any app carry `via` (the app's name), and the game shows them to both players as \"via \\<app\\>\"."
+    },
+    {
+      "name": "app/actions",
+      "x-displayName": "Per-action approval",
+      "description": "Instead of holding a write scope, an app can ask the player to approve **one** write at a time. This is how **public clients** (read scopes only) can act, and an option for confidential apps that only act now and then. Your app still needs the Krunker team's approval for the endpoint's scope; the player's grant doesn't need to include it.\n\nRequesting an approval is a write, so krapio does not send it. It does read the outcome ([Action Status](#action-status)) and the redirect back (`parseCallback`).\n\nSupported endpoints:\n\n- `POST /market/listings`, `DELETE /market/listings/:listing_id`, `POST /market/purchase`\n- `POST /trades`, `POST /trades/:trade_id/accept`, `POST /trades/:trade_id/cancel`\n- `POST /inventory/gift`\n- `PUT /friends/following/:sub`, `DELETE /friends/following/:sub`\n\nEvery other write endpoint (bulk endpoints, quick-sell, paint, style, locks, decline all, DMs) answers `400 approval_unavailable` to the approval header."
     }
   ],
   "x-tagGroups": [
@@ -208,6 +263,22 @@
         "token/creator",
         "token/staff",
         "token/ranked"
+      ]
+    },
+    {
+      "name": "App API",
+      "tags": [
+        "app/player",
+        "app/stats",
+        "app/inventory",
+        "app/trades",
+        "app/market",
+        "app/friends",
+        "app/maps",
+        "app/clan",
+        "app/notifications",
+        "app/dms",
+        "app/actions"
       ]
     }
   ],
@@ -9570,6 +9641,2140 @@
           }
         }
       }
+    },
+    "/app/v1/actions/{action_id}": {
+      "get": {
+        "operationId": "app.actions.get",
+        "summary": "Action Status",
+        "description": "The outcome of an action, with any valid token of the same player and app.\n\n| `status` | Meaning |\n| --- | --- |\n| `pending` | Waiting for the player |\n| `approved` | It ran and succeeded; `result` is the body the direct call would have returned |\n| `failed` | It ran and the endpoint refused it; `result` holds the normal error body and `result_status` its HTTP status |\n| `denied` | The player declined |\n| `expired` | Nobody approved it within 10 minutes |\n\nActions are kept for 24 hours after they are created or decided. `result_status` and `result` are absent until the action has run.\n\nErrors specific to approval requests:\n\n| Status | `code` | When |\n| --- | --- | --- |\n| 400 | `approval_unavailable` | The endpoint doesn't support approval |\n| 400 | `invalid_redirect_uri` | `Krunker-Approval-Redirect` isn't one of your redirect URIs |\n| 400 | `invalid_request` | `Krunker-Approval` isn't `request`, or the state is missing or too long |\n| 403 | `insufficient_scope` | Your app isn't approved for the endpoint's scope |\n| 413 | `invalid_request` | The body is over 16 KB |\n| 429 | `rate_limited` | More than 20 approval requests in 10 minutes for this player (`Retry-After: 600`) |",
+        "tags": [
+          "app/actions"
+        ],
+        "x-krapio": "krunker.app(accessToken).actions.get()",
+        "x-routes": [
+          "app.actions.get"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst get = await krunker.app(accessToken).actions.get(actionId);\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppAction"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": {
+                    "action_id": "act_6Hc2...",
+                    "type": "follow.remove",
+                    "status": "approved",
+                    "summary": {
+                      "type": "follow.remove",
+                      "peer": "GamerRenamed"
+                    },
+                    "created_at": "2026-11-06T23:51:01Z",
+                    "expires_at": "2026-11-07T00:01:01Z",
+                    "decided_at": "2026-11-06T23:51:40Z",
+                    "result_status": 200,
+                    "result": {
+                      "data": {
+                        "sub": "21054d5f-757e-4583-a5ef-b60ad7e3899f",
+                        "name": "GamerRenamed",
+                        "following": false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/clan": {
+      "get": {
+        "operationId": "app.clan.get",
+        "summary": "Get Clan",
+        "description": "- When the player has no clan: `{ \"data\": { \"clan\": null } }`.\n- `role` is `owner`, `commander`, `captain`, `soldier` or `recruit`.\n- `is_officer` means the player can see join applications (the owner or a captain, as in game). The clan's KR bank isn't included.",
+        "tags": [
+          "app/clan"
+        ],
+        "x-krapio": "krunker.app(accessToken).clan.get()",
+        "x-routes": [
+          "app.clan.get"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst get = await krunker.app(accessToken).clan.get();\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "clan:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppClanMembership"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": {
+                    "clan": {
+                      "clan_id": 445646,
+                      "name": "ALPHA",
+                      "score": 3201,
+                      "rank": 0,
+                      "logo": 1769084608,
+                      "banner_color": "#1a1a1a",
+                      "member_count": 8
+                    },
+                    "role": "captain",
+                    "is_officer": true
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/clan/members": {
+      "get": {
+        "operationId": "app.clan.members",
+        "summary": "Clan Members",
+        "description": "Paged. `404 not_found` when the player has no clan.",
+        "tags": [
+          "app/clan"
+        ],
+        "x-krapio": "krunker.app(accessToken).clan.members()",
+        "x-routes": [
+          "app.clan.members"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst members = await krunker.app(accessToken).clan.members({ cursor, limit });\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "clan:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "the `next_cursor` of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "1 to 100, 50 when omitted (dms: 1 to 50, 20 when omitted)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppClanMember"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "description": "opaque, pass it back as `cursor`; absent on the last page"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "sub": "21054d5f-757e-4583-a5ef-b60ad7e3899f",
+                      "name": "GamerRenamed",
+                      "role": "owner",
+                      "score": 200188
+                    }
+                  ],
+                  "next_cursor": "YzM"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/clan/applications": {
+      "get": {
+        "operationId": "app.clan.applications",
+        "summary": "Clan Applications",
+        "description": "Pending join requests, oldest first (paged). Officers only: `403 not_clan_officer` otherwise, `404 not_found` without a clan.",
+        "tags": [
+          "app/clan"
+        ],
+        "x-krapio": "krunker.app(accessToken).clan.applications()",
+        "x-routes": [
+          "app.clan.applications"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst applications = await krunker.app(accessToken).clan.applications({ cursor, limit });\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "clan:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "the `next_cursor` of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "1 to 100, 50 when omitted (dms: 1 to 50, 20 when omitted)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppPlayerRef"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "description": "opaque, pass it back as `cursor`; absent on the last page"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "sub": "557a7808-dc59-4825-8a8d-172497f0675f",
+                      "name": "newplayer"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/dms": {
+      "get": {
+        "operationId": "app.dms.conversations",
+        "summary": "Conversations",
+        "description": "The player's conversations, newest first. `limit` is 1 to 50 (default 20; higher values are lowered to 50, krapio refuses them before the request), `cursor` is the previous page's `next_cursor`. `unread` counts messages from the peer the player hasn't read in game. Reading through the API never marks anything read.",
+        "tags": [
+          "app/dms"
+        ],
+        "x-krapio": "krunker.app(accessToken).dms.conversations()",
+        "x-routes": [
+          "app.dms.conversations"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst conversations = await krunker.app(accessToken).dms.conversations({ cursor, limit });\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "dms:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "the `next_cursor` of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "description": "1 to 100, 50 when omitted (dms: 1 to 50, 20 when omitted)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppDmConversation"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "description": "opaque, pass it back as `cursor`; absent on the last page"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "peer": {
+                        "sub": "21054d5f-757e-4583-a5ef-b60ad7e3899f",
+                        "name": "GamerRenamed"
+                      },
+                      "unread": 0,
+                      "last_message": {
+                        "message_id": 179,
+                        "from_me": true,
+                        "text": "ready for scrims?",
+                        "sent_at": "2026-11-06T22:37:01.297Z",
+                        "read": false,
+                        "via": "My Tracker"
+                      }
+                    }
+                  ],
+                  "next_cursor": "152"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/dms/{sub}": {
+      "get": {
+        "operationId": "app.dms.messages",
+        "summary": "Messages",
+        "description": "Messages with one player, newest first; `cursor` pages to older messages. `read` says whether the recipient has read the message. Note that `peer` is next to `data`, so krapio returns the whole body here.",
+        "tags": [
+          "app/dms"
+        ],
+        "x-krapio": "krunker.app(accessToken).dms.messages()",
+        "x-routes": [
+          "app.dms.messages"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst messages = await krunker.app(accessToken).dms.messages(sub, { cursor, limit });\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "dms:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sub",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "the `next_cursor` of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "description": "1 to 100, 50 when omitted (dms: 1 to 50, 20 when omitted)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppDmThread"
+                },
+                "example": {
+                  "peer": {
+                    "sub": "21054d5f-757e-4583-a5ef-b60ad7e3899f",
+                    "name": "GamerRenamed"
+                  },
+                  "data": [
+                    {
+                      "message_id": 180,
+                      "from_me": false,
+                      "text": "sure",
+                      "sent_at": "2026-11-06T22:37:13.275Z",
+                      "read": true
+                    },
+                    {
+                      "message_id": 179,
+                      "from_me": true,
+                      "text": "ready for scrims?",
+                      "sent_at": "2026-11-06T22:37:01.297Z",
+                      "read": true,
+                      "via": "My Tracker"
+                    }
+                  ],
+                  "next_cursor": "179"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/friends/following": {
+      "get": {
+        "operationId": "app.friends.following",
+        "summary": "Following and Followers",
+        "description": "Newest first (paged). Banned and hidden accounts are left out.\n\n`online` is omitted when presence is temporarily unavailable; treat a missing value as unknown, not offline.",
+        "tags": [
+          "app/friends"
+        ],
+        "x-krapio": "krunker.app(accessToken).friends.following()",
+        "x-routes": [
+          "app.friends.following"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst following = await krunker.app(accessToken).friends.following({ cursor, limit });\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "friends:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "the `next_cursor` of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "1 to 100, 50 when omitted (dms: 1 to 50, 20 when omitted)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppFriend"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "description": "opaque, pass it back as `cursor`; absent on the last page"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "sub": "21054d5f-757e-4583-a5ef-b60ad7e3899f",
+                      "name": "GamerRenamed",
+                      "since": "2026-07-02T13:44:21Z",
+                      "online": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/friends/followers": {
+      "get": {
+        "operationId": "app.friends.followers",
+        "summary": "Following and Followers",
+        "description": "Newest first (paged). Banned and hidden accounts are left out.\n\n`online` is omitted when presence is temporarily unavailable; treat a missing value as unknown, not offline.",
+        "tags": [
+          "app/friends"
+        ],
+        "x-krapio": "krunker.app(accessToken).friends.followers()",
+        "x-routes": [
+          "app.friends.followers"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst followers = await krunker.app(accessToken).friends.followers({ cursor, limit });\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "friends:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "the `next_cursor` of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "1 to 100, 50 when omitted (dms: 1 to 50, 20 when omitted)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppFriend"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "description": "opaque, pass it back as `cursor`; absent on the last page"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "sub": "21054d5f-757e-4583-a5ef-b60ad7e3899f",
+                      "name": "GamerRenamed",
+                      "since": "2026-07-02T13:44:21Z",
+                      "online": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/inventory/items": {
+      "get": {
+        "operationId": "app.inventory.items",
+        "summary": "Items",
+        "description": "The player's items, the same set the in-game inventory shows (paged). Copies listed on the market are left out, and stack counts exclude listed units.",
+        "tags": [
+          "app/inventory"
+        ],
+        "x-krapio": "krunker.app(accessToken).inventory.items()",
+        "x-routes": [
+          "app.inventory.items"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst items = await krunker.app(accessToken).inventory.items({ cursor, limit });\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "inventory:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "the `next_cursor` of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "1 to 100, 50 when omitted (dms: 1 to 50, 20 when omitted)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppItem"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "description": "opaque, pass it back as `cursor`; absent on the last page"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "skin_index": 113,
+                      "count": 8,
+                      "stackable": true,
+                      "locked": false
+                    },
+                    {
+                      "instance_id": 200107647,
+                      "skin_index": 7584,
+                      "count": 1,
+                      "stackable": false,
+                      "locked": true,
+                      "wear": 0.62,
+                      "wear_tier": "Wrecked",
+                      "serial": 42,
+                      "pattern_seed": 693909
+                    }
+                  ],
+                  "next_cursor": "YzExODc4NDAzOA"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/inventory/currencies": {
+      "get": {
+        "operationId": "app.inventory.currencies",
+        "summary": "Currencies",
+        "description": "Balances. KR and Junk are always present; other currencies only when the player holds some.",
+        "tags": [
+          "app/inventory"
+        ],
+        "x-krapio": "krunker.app(accessToken).inventory.currencies()",
+        "x-routes": [
+          "app.inventory.currencies"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst currencies = await krunker.app(accessToken).inventory.currencies();\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "inventory:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppCurrency"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "currency_id": 1,
+                      "name": "Krunkies",
+                      "symbol": "KR",
+                      "amount": 525369
+                    },
+                    {
+                      "currency_id": 2,
+                      "name": "Junk",
+                      "symbol": "JNK",
+                      "amount": 1189.94
+                    },
+                    {
+                      "currency_id": 3,
+                      "name": "Ranked Points",
+                      "symbol": "RP",
+                      "amount": 20802
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/maps": {
+      "get": {
+        "operationId": "app.maps.list",
+        "summary": "Published Maps",
+        "description": "The player's published maps, newest first (paged). Map KR balances aren't included.\n\n`description` is omitted when empty. `playtime_ms` is the total time players have spent in the map.",
+        "tags": [
+          "app/maps"
+        ],
+        "x-krapio": "krunker.app(accessToken).maps.list()",
+        "x-routes": [
+          "app.maps.list"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst list = await krunker.app(accessToken).maps.list({ cursor, limit });\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "maps:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "the `next_cursor` of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "1 to 100, 50 when omitted (dms: 1 to 50, 20 when omitted)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppMap"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "description": "opaque, pass it back as `cursor`; absent on the last page"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "map_id": 157692,
+                      "name": "Frostfang",
+                      "description": "Snowy arena",
+                      "votes": 0,
+                      "plays": 31,
+                      "playtime_ms": 1615251,
+                      "featured": false,
+                      "verified": false,
+                      "restricted": false,
+                      "category": 0,
+                      "updates": 28,
+                      "created_at": "2026-11-04T14:54:47Z",
+                      "updated_at": "2026-11-05T18:08:22Z"
+                    }
+                  ],
+                  "next_cursor": "YzE1NzY5Mg"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/market/listings": {
+      "get": {
+        "operationId": "app.market.listings",
+        "summary": "Listings",
+        "description": "All of the player's active listings. Not paged: the game caps active listings.",
+        "tags": [
+          "app/market"
+        ],
+        "x-krapio": "krunker.app(accessToken).market.listings()",
+        "x-routes": [
+          "app.market.listings"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst listings = await krunker.app(accessToken).market.listings();\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "market:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppListing"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "listing_id": 24971166,
+                      "price": 700,
+                      "item": {
+                        "skin_index": 172,
+                        "count": 1,
+                        "stackable": true
+                      },
+                      "listed_at": "2026-01-11T01:43:41Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/market/history": {
+      "get": {
+        "operationId": "app.market.history",
+        "summary": "History",
+        "description": "Completed sales and purchases plus cancelled listings, newest first (paged). Quick-sells aren't included.\n\n`side` is `sold` or `bought`; `status` is `completed` or `cancelled`. A cancelled listing has no `counterparty`.",
+        "tags": [
+          "app/market"
+        ],
+        "x-krapio": "krunker.app(accessToken).market.history()",
+        "x-routes": [
+          "app.market.history"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst history = await krunker.app(accessToken).market.history({ cursor, limit });\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "market:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "the `next_cursor` of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "1 to 100, 50 when omitted (dms: 1 to 50, 20 when omitted)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppMarketHistoryEntry"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "description": "opaque, pass it back as `cursor`; absent on the last page"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "listing_id": 24971183,
+                      "side": "bought",
+                      "status": "completed",
+                      "skin_index": 2583,
+                      "price": 200,
+                      "counterparty": {
+                        "sub": "21054d5f-757e-4583-a5ef-b60ad7e3899f",
+                        "name": "GamerRenamed"
+                      },
+                      "at": "2026-11-06T22:38:03Z"
+                    }
+                  ],
+                  "next_cursor": "YzI0OTcxNzgw"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/notifications": {
+      "get": {
+        "operationId": "app.notifications.list",
+        "summary": "List Notifications",
+        "description": "The player's Krunker Mail, newest first (paged). Reading through the API never marks mail as read. `?unread=true` returns unread mail only.\n\n- `category` matches the in-game mail tabs: `followers`, `clan`, `hub` or `inbox`.\n- `from.system` is true for mail from Krunker, which has no `sub`. A sender whose account no longer exists is `{ \"name\": \"Unknown\", \"system\": false }`.\n- `link` is the game's own reference for the mail (often a player or clan name).",
+        "tags": [
+          "app/notifications"
+        ],
+        "x-krapio": "krunker.app(accessToken).notifications.list()",
+        "x-routes": [
+          "app.notifications.list"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst list = await krunker.app(accessToken).notifications.list({ unread, cursor, limit });\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "notifications:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "unread",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "const": "true"
+            },
+            "description": "only unread mail"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "the `next_cursor` of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "1 to 100, 50 when omitted (dms: 1 to 50, 20 when omitted)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppNotification"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "description": "opaque, pass it back as `cursor`; absent on the last page"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "notification_id": 16507007,
+                      "category": "inbox",
+                      "subject": "Item sold",
+                      "text": "bananas purchased your item for 20 KR!",
+                      "link": "bananas",
+                      "from": {
+                        "name": "Krunker",
+                        "system": true
+                      },
+                      "read": false,
+                      "sent_at": "2026-11-03T17:40:13Z"
+                    },
+                    {
+                      "notification_id": 16507014,
+                      "category": "followers",
+                      "subject": "Hello",
+                      "text": "...",
+                      "link": "GamerRenamed",
+                      "from": {
+                        "sub": "21054d5f-757e-4583-a5ef-b60ad7e3899f",
+                        "name": "GamerRenamed",
+                        "system": false
+                      },
+                      "read": true,
+                      "sent_at": "2026-11-06T22:42:12Z",
+                      "read_at": "2026-11-06T22:42:12Z"
+                    }
+                  ],
+                  "next_cursor": "YzE2NTA3MDE0"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/notifications/count": {
+      "get": {
+        "operationId": "app.notifications.count",
+        "summary": "Unread Count",
+        "description": "how much mail is unread",
+        "tags": [
+          "app/notifications"
+        ],
+        "x-krapio": "krunker.app(accessToken).notifications.count()",
+        "x-routes": [
+          "app.notifications.count"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst count = await krunker.app(accessToken).notifications.count();\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "notifications:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppNotificationCount"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": {
+                    "unread": 98
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/me": {
+      "get": {
+        "operationId": "app.player.me",
+        "summary": "Me",
+        "description": "The signed-in player. This is also the discovery document's `userinfo_endpoint`.\n\n`clan` is omitted when the player has no clan. `scopes` lists the scopes this token can use right now. It sits next to `data`, so krapio returns the whole body here: `const { data: player, scopes } = await me.player.me()`.\n\n*observed*: without a token the reply is `401 {\"error\": {\"code\": \"invalid_token\", \"message\": \"missing or malformed access token\"}}`, with a made-up one the message is `invalid or expired access token`. Both carry `WWW-Authenticate: Bearer error=\"invalid_token\"` and no rate limit headers.",
+        "tags": [
+          "app/player"
+        ],
+        "x-krapio": "krunker.app(accessToken).player.me()",
+        "x-routes": [
+          "app.player.me"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst me = await krunker.app(accessToken).player.me();\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "profile"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppMe"
+                },
+                "example": {
+                  "data": {
+                    "sub": "0f29b001-eb77-4d21-885f-c121a6511df4",
+                    "name": "bananas",
+                    "level": 146,
+                    "clan": "ALPHA",
+                    "premium": true,
+                    "verified": false
+                  },
+                  "scopes": [
+                    "profile",
+                    "stats:read",
+                    "inventory:read"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/players/by-name/{name}": {
+      "get": {
+        "operationId": "app.player.byName",
+        "summary": "Look up a player by name",
+        "description": "Returns the same fields as `/me` (without `scopes`) for any player, so you can get their subject id. Banned and hidden accounts are `404 not_found`.",
+        "tags": [
+          "app/player"
+        ],
+        "x-krapio": "krunker.app(accessToken).player.byName()",
+        "x-routes": [
+          "app.player.byName"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst byName = await krunker.app(accessToken).player.byName(name);\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "profile"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppPlayer"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": {
+                    "sub": "21054d5f-757e-4583-a5ef-b60ad7e3899f",
+                    "name": "GamerRenamed",
+                    "level": 52,
+                    "premium": false,
+                    "verified": false
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/stats": {
+      "get": {
+        "operationId": "app.stats.get",
+        "summary": "Lifetime Stats",
+        "description": "Lifetime stats. KR and other currency fields aren't included.\n\n`accuracy` is a percentage (hits / shots). `classes` lists every class in game order.",
+        "tags": [
+          "app/stats"
+        ],
+        "x-krapio": "krunker.app(accessToken).stats.get()",
+        "x-routes": [
+          "app.stats.get"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst get = await krunker.app(accessToken).stats.get();\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "stats:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppStats"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": {
+                    "level": 146,
+                    "score": 23872353,
+                    "kills": 4308,
+                    "deaths": 68,
+                    "kdr": 63.35,
+                    "wins": 48,
+                    "losses": 2682,
+                    "games": 2730,
+                    "time_played_ms": 139613906,
+                    "accuracy": 26.39,
+                    "combat": {
+                      "assists": 0,
+                      "headshots": 393,
+                      "legshots": 0,
+                      "wallbangs": 0,
+                      "melee_kills": 4,
+                      "fist_kills": 0,
+                      "thrown_kills": 0,
+                      "shots": 2994,
+                      "hits": 790,
+                      "nukes": 0,
+                      "airdrops": 0,
+                      "airdrops_stolen": 0,
+                      "slimers": 0,
+                      "juggernauts": 0,
+                      "juggernauts_killed": 0,
+                      "war_machines": 0,
+                      "crouches": 4215,
+                      "sprays": 4
+                    },
+                    "classes": [
+                      {
+                        "class_id": 0,
+                        "name": "Triggerman",
+                        "score": 124218,
+                        "level": 11
+                      }
+                    ],
+                    "raids": [
+                      {
+                        "map_id": 47,
+                        "completions": 2,
+                        "attempts": 5,
+                        "best_time_ms": 512000,
+                        "ai_kills": 340,
+                        "boss_kills": 2,
+                        "deaths": 9
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/stats/ranked": {
+      "get": {
+        "operationId": "app.stats.ranked",
+        "summary": "Ranked Stats",
+        "description": "Ranked profile per region. `season` defaults to the current season and must be between 1 and `current_season`.\n\n- During placement (the first 6 matches) `rank` is `\"Unranked\"`, `mmr` is `null` and `placement_matches_remaining` counts down.\n- `peak_mmr` is present once the season tracks it. `regions` is empty when the player hasn't played that season.",
+        "tags": [
+          "app/stats"
+        ],
+        "x-krapio": "krunker.app(accessToken).stats.ranked()",
+        "x-routes": [
+          "app.stats.ranked"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst ranked = await krunker.app(accessToken).stats.ranked(season);\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "stats:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "season",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppRankedStats"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": {
+                    "season": 16,
+                    "current_season": 16,
+                    "season_ends_at": "2026-12-01T00:00:00Z",
+                    "regions": [
+                      {
+                        "region": 3,
+                        "region_name": "Europe",
+                        "rank": "Diamond",
+                        "mmr": 3207,
+                        "peak_mmr": 3250,
+                        "placement_matches_remaining": 0,
+                        "matches": 40,
+                        "wins": 40,
+                        "losses": 0,
+                        "kills": 21,
+                        "deaths": 16,
+                        "assists": 10,
+                        "score": 3435,
+                        "damage_done": 2064,
+                        "time_played_ms": 404984,
+                        "best_kills_in_match": 21,
+                        "best_damage_in_match": 2064
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/stats/challenges": {
+      "get": {
+        "operationId": "app.stats.challenges",
+        "summary": "Challenges",
+        "description": "Active challenges with the player's progress. Paged.\n\n| Query | Description |\n| --- | --- |\n| `type` | `map`, `weapon`, `nightmare`, `ranked`, `daily`, `weekly` or `event` |\n| `status` | `all` (default), `completed` or `in_progress` |\n| `cursor`, `limit` | Paging |\n\n`requirement` and `rewards` are the game's own challenge definition, passed through as they are. `ends_at` is absent for challenges without an end date.",
+        "tags": [
+          "app/stats"
+        ],
+        "x-krapio": "krunker.app(accessToken).stats.challenges()",
+        "x-routes": [
+          "app.stats.challenges"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst challenges = await krunker.app(accessToken).stats.challenges({ type, status, cursor, limit });\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "stats:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "map",
+                "weapon",
+                "nightmare",
+                "ranked",
+                "daily",
+                "weekly",
+                "event"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "completed",
+                "in_progress"
+              ]
+            },
+            "description": "all when omitted"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "the `next_cursor` of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "1 to 100, 50 when omitted (dms: 1 to 50, 20 when omitted)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppChallenge"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "description": "opaque, pass it back as `cursor`; absent on the last page"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "challenge_id": 908,
+                      "name": "Get a 10 killstreak",
+                      "type": "weapon",
+                      "icon": 4,
+                      "requirement": {
+                        "ky": "kstk",
+                        "wep": 1,
+                        "val": 10
+                      },
+                      "target": 10,
+                      "progress": 14,
+                      "completed": true,
+                      "rewards": {
+                        "kr": 10,
+                        "jnk": 0.05
+                      },
+                      "ends_at": "2026-11-09T00:00:00Z"
+                    }
+                  ],
+                  "next_cursor": "YzI"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/trades": {
+      "get": {
+        "operationId": "app.trades.list",
+        "summary": "List Trades",
+        "description": "`status` is `open` (default) or `completed`. Open trades include both directions; completed trades are newest first.\n\n- `role` is `sender` when the player created the trade and `recipient` when it was sent to them.\n- `offered` is what the sender gives; `requested` is what the sender asks for.\n- `partner` is `null` if that account no longer exists.",
+        "tags": [
+          "app/trades"
+        ],
+        "x-krapio": "krunker.app(accessToken).trades.list()",
+        "x-routes": [
+          "app.trades.list"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst list = await krunker.app(accessToken).trades.list({ status, cursor, limit });\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "trades:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "completed",
+                "open"
+              ]
+            },
+            "description": "open when omitted"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "the `next_cursor` of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "1 to 100, 50 when omitted (dms: 1 to 50, 20 when omitted)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppTrade"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "description": "opaque, pass it back as `cursor`; absent on the last page"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": [
+                    {
+                      "trade_id": 8880923,
+                      "status": "completed",
+                      "role": "sender",
+                      "partner": {
+                        "sub": "0f29b001-eb77-4d21-885f-c121a6511df4",
+                        "name": "bananas"
+                      },
+                      "offered": {
+                        "items": [
+                          {
+                            "instance_id": 200000099,
+                            "skin_index": 7582,
+                            "count": 1,
+                            "stackable": false,
+                            "serial": 3
+                          }
+                        ],
+                        "currencies": []
+                      },
+                      "requested": {
+                        "items": [],
+                        "currencies": [
+                          {
+                            "currency_id": 1,
+                            "amount": 50
+                          }
+                        ]
+                      },
+                      "message": "t2",
+                      "created_at": "2026-11-03T17:38:48Z",
+                      "completed_at": "2026-11-03T17:39:41Z"
+                    }
+                  ],
+                  "next_cursor": "YzI"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/v1/trades/count": {
+      "get": {
+        "operationId": "app.trades.count",
+        "summary": "Trade Count",
+        "description": "how many trades are open and completed",
+        "tags": [
+          "app/trades"
+        ],
+        "x-krapio": "krunker.app(accessToken).trades.count()",
+        "x-routes": [
+          "app.trades.count"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "ts",
+            "label": "krapio",
+            "source": "import { Krunker } from \"krapio\";\n\nconst krunker = new Krunker();\nconst count = await krunker.app(accessToken).trades.count();\n"
+          }
+        ],
+        "security": [
+          {
+            "appOAuth": [
+              "trades:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppTradeCount"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                },
+                "example": {
+                  "data": {
+                    "open": 2,
+                    "completed": 51
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9585,9 +11790,68 @@
         "scheme": "bearer",
         "bearerFormat": "JWT",
         "description": "the player's FRVR access token"
+      },
+      "appOAuth": {
+        "type": "oauth2",
+        "description": "Login with Krunker: authorization code flow with PKCE (S256); the access token (kat_...) goes in the Authorization header as a bearer",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://krunker.io/oauth/authorize",
+            "tokenUrl": "https://gapi.svc.krunker.io/oauth/token",
+            "refreshUrl": "https://gapi.svc.krunker.io/oauth/token",
+            "scopes": {
+              "profile": "the player's subject id, name, level, clan tag and premium/verified flags; always granted",
+              "stats:read": "lifetime stats, ranked profile per region and season, challenge progress",
+              "notifications:read": "Krunker Mail and system notices",
+              "inventory:read": "items and currency balances",
+              "inventory:write:skins": "quick-sell, paint, style and lock items",
+              "inventory:write:currency": "send KR to another player",
+              "inventory:write": "both inventory write scopes",
+              "trades:read": "open and completed trades, trade count",
+              "trades:write": "create, accept, cancel and decline trades",
+              "market:read": "the player's own listings and market history",
+              "market:write": "list, unlist and buy on the market",
+              "friends:read": "following and followers, with online status",
+              "friends:write": "follow and unfollow players",
+              "dms:read": "direct message conversations and messages",
+              "dms:write": "send DMs to the player's friends",
+              "clan:read": "the player's clan, its members and join applications",
+              "maps:read": "the player's published maps and their stats",
+              "events:subscribe": "receive webhooks about the player"
+            }
+          }
+        }
       }
     },
     "schemas": {
+      "AppErrorBody": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/AppErrorCode"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "description": "the error body of the app api; branch on `code`, `message` is for people and can change"
+      },
+      "AppErrorCode": {
+        "type": "string",
+        "description": "the codes that are not a game rule; a 422 can carry any game code (`market_price_changed`, `trade_level_too_low`, ...)"
+      },
       "ApiErrorBody": {
         "type": "object",
         "properties": {
@@ -9609,6 +11873,10 @@
               }
             ]
           },
+          "error_description": {
+            "type": "string",
+            "description": "only on the oauth endpoints, next to an `error` that is the code"
+          },
           "retry_after": {
             "type": "number"
           }
@@ -9617,6 +11885,1180 @@
           "error"
         ],
         "description": "body of every error reply"
+      },
+      "AppTradeCount": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "number"
+          },
+          "completed": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "open",
+          "completed"
+        ],
+        "description": "GET /app/v1/trades/count"
+      },
+      "AppTrade": {
+        "type": "object",
+        "properties": {
+          "trade_id": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "completed"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "sender",
+              "recipient"
+            ],
+            "description": "sender when the player created the trade, recipient when it was sent to them"
+          },
+          "partner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppPlayerRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null when that account no longer exists"
+          },
+          "offered": {
+            "$ref": "#/components/schemas/AppTradeSide",
+            "description": "what the sender gives"
+          },
+          "requested": {
+            "$ref": "#/components/schemas/AppTradeSide",
+            "description": "what the sender asks for"
+          },
+          "message": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "completed_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trade_id",
+          "status",
+          "role",
+          "partner",
+          "offered",
+          "requested",
+          "created_at"
+        ],
+        "description": "one row of GET /app/v1/trades"
+      },
+      "AppPlayerRef": {
+        "type": "object",
+        "properties": {
+          "sub": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sub",
+          "name"
+        ],
+        "description": "another player as an app sees them: the subject id is per app and stable, the name is public and can change"
+      },
+      "AppTradeSide": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppItem"
+            }
+          },
+          "currencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppTradeCurrency"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "currencies"
+        ],
+        "description": "one side of a trade"
+      },
+      "AppItem": {
+        "type": "object",
+        "properties": {
+          "instance_id": {
+            "type": "number",
+            "description": "the copy's global id; a stackable item has none and is addressed by `skin_index` and `count`"
+          },
+          "skin_index": {
+            "type": "number",
+            "description": "the catalog item"
+          },
+          "count": {
+            "type": "number"
+          },
+          "stackable": {
+            "type": "boolean"
+          },
+          "locked": {
+            "type": "boolean",
+            "description": "inventory only: the player locked this copy or stack in game, apps can't use it"
+          },
+          "wear": {
+            "type": "number",
+            "description": "0 is best"
+          },
+          "wear_tier": {
+            "$ref": "#/components/schemas/AppWearTier"
+          },
+          "serial": {
+            "type": "number",
+            "description": "the mint number"
+          },
+          "paint": {
+            "type": "string",
+            "description": "hex colour"
+          },
+          "paint_shader": {
+            "type": "number",
+            "description": "the paint shader id, instead of `paint`"
+          },
+          "style": {
+            "type": "number"
+          },
+          "nametag": {
+            "type": "string"
+          },
+          "pattern_seed": {
+            "type": "number",
+            "description": "0 to 999999"
+          },
+          "kounter": {
+            "$ref": "#/components/schemas/AppKounter"
+          }
+        },
+        "required": [
+          "skin_index",
+          "count",
+          "stackable"
+        ],
+        "description": "one copy or one stack, as the inventory, trades and listings show it; names, images and rarities are in /data/skins by `skin_index`"
+      },
+      "AppWearTier": {
+        "type": "string",
+        "enum": [
+          "Flawless",
+          "Tested",
+          "Trashed",
+          "Wrecked"
+        ],
+        "description": "how worn a copy is, from `wear`"
+      },
+      "AppKounter": {
+        "type": "object",
+        "properties": {
+          "kills": {
+            "type": "number"
+          },
+          "hskills": {
+            "type": "number"
+          },
+          "aikills": {
+            "type": "number"
+          },
+          "headshots": {
+            "type": "number"
+          },
+          "hits": {
+            "type": "number"
+          },
+          "shots": {
+            "type": "number"
+          },
+          "jumps": {
+            "type": "number"
+          }
+        },
+        "description": "the kill counter of a copy, by stat"
+      },
+      "AppTradeCurrency": {
+        "type": "object",
+        "properties": {
+          "currency_id": {
+            "type": "number"
+          },
+          "amount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "currency_id",
+          "amount"
+        ],
+        "description": "an amount of one currency in a trade"
+      },
+      "AppChallenge": {
+        "type": "object",
+        "properties": {
+          "challenge_id": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AppChallengeType"
+          },
+          "icon": {
+            "type": "number"
+          },
+          "requirement": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "the game's own challenge definition, passed through"
+          },
+          "target": {
+            "type": "number"
+          },
+          "progress": {
+            "type": "number"
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "rewards": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "the game's own reward definition, passed through"
+          },
+          "ends_at": {
+            "type": "string",
+            "description": "absent for a challenge without an end date"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "name",
+          "type",
+          "icon",
+          "requirement",
+          "target",
+          "progress",
+          "completed",
+          "rewards"
+        ],
+        "description": "one row of GET /app/v1/stats/challenges"
+      },
+      "AppChallengeType": {
+        "type": "string",
+        "enum": [
+          "map",
+          "weapon",
+          "nightmare",
+          "ranked",
+          "daily",
+          "weekly",
+          "event"
+        ],
+        "description": "the `type` filter of GET /app/v1/stats/challenges"
+      },
+      "AppRankedStats": {
+        "type": "object",
+        "properties": {
+          "season": {
+            "type": "number"
+          },
+          "current_season": {
+            "type": "number"
+          },
+          "season_ends_at": {
+            "type": "string"
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppRankedRegion"
+            },
+            "description": "empty when the player hasn't played that season"
+          }
+        },
+        "required": [
+          "season",
+          "current_season",
+          "season_ends_at",
+          "regions"
+        ],
+        "description": "GET /app/v1/stats/ranked"
+      },
+      "AppRankedRegion": {
+        "type": "object",
+        "properties": {
+          "region": {
+            "type": "number"
+          },
+          "region_name": {
+            "type": "string"
+          },
+          "rank": {
+            "type": "string",
+            "description": "\"Unranked\" during the 6 placement matches"
+          },
+          "mmr": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "null during placement"
+          },
+          "peak_mmr": {
+            "type": "number",
+            "description": "present once the season tracks it"
+          },
+          "placement_matches_remaining": {
+            "type": "number"
+          },
+          "matches": {
+            "type": "number"
+          },
+          "wins": {
+            "type": "number"
+          },
+          "losses": {
+            "type": "number"
+          },
+          "kills": {
+            "type": "number"
+          },
+          "deaths": {
+            "type": "number"
+          },
+          "assists": {
+            "type": "number"
+          },
+          "score": {
+            "type": "number"
+          },
+          "damage_done": {
+            "type": "number"
+          },
+          "time_played_ms": {
+            "type": "number"
+          },
+          "best_kills_in_match": {
+            "type": "number"
+          },
+          "best_damage_in_match": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "region",
+          "region_name",
+          "rank",
+          "mmr",
+          "placement_matches_remaining",
+          "matches",
+          "wins",
+          "losses",
+          "kills",
+          "deaths",
+          "assists",
+          "score",
+          "damage_done",
+          "time_played_ms",
+          "best_kills_in_match",
+          "best_damage_in_match"
+        ],
+        "description": "one region of GET /app/v1/stats/ranked"
+      },
+      "AppStats": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number"
+          },
+          "score": {
+            "type": "number"
+          },
+          "kills": {
+            "type": "number"
+          },
+          "deaths": {
+            "type": "number"
+          },
+          "kdr": {
+            "type": "number"
+          },
+          "wins": {
+            "type": "number"
+          },
+          "losses": {
+            "type": "number"
+          },
+          "games": {
+            "type": "number"
+          },
+          "time_played_ms": {
+            "type": "number"
+          },
+          "accuracy": {
+            "type": "number",
+            "description": "hits / shots as a percentage"
+          },
+          "combat": {
+            "type": "object",
+            "properties": {
+              "assists": {
+                "type": "number"
+              },
+              "headshots": {
+                "type": "number"
+              },
+              "legshots": {
+                "type": "number"
+              },
+              "wallbangs": {
+                "type": "number"
+              },
+              "melee_kills": {
+                "type": "number"
+              },
+              "fist_kills": {
+                "type": "number"
+              },
+              "thrown_kills": {
+                "type": "number"
+              },
+              "shots": {
+                "type": "number"
+              },
+              "hits": {
+                "type": "number"
+              },
+              "nukes": {
+                "type": "number"
+              },
+              "airdrops": {
+                "type": "number"
+              },
+              "airdrops_stolen": {
+                "type": "number"
+              },
+              "slimers": {
+                "type": "number"
+              },
+              "juggernauts": {
+                "type": "number"
+              },
+              "juggernauts_killed": {
+                "type": "number"
+              },
+              "war_machines": {
+                "type": "number"
+              },
+              "crouches": {
+                "type": "number"
+              },
+              "sprays": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "assists",
+              "headshots",
+              "legshots",
+              "wallbangs",
+              "melee_kills",
+              "fist_kills",
+              "thrown_kills",
+              "shots",
+              "hits",
+              "nukes",
+              "airdrops",
+              "airdrops_stolen",
+              "slimers",
+              "juggernauts",
+              "juggernauts_killed",
+              "war_machines",
+              "crouches",
+              "sprays"
+            ]
+          },
+          "classes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppClassStats"
+            },
+            "description": "every class in game order"
+          },
+          "raids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppRaidStats"
+            }
+          }
+        },
+        "required": [
+          "level",
+          "score",
+          "kills",
+          "deaths",
+          "kdr",
+          "wins",
+          "losses",
+          "games",
+          "time_played_ms",
+          "accuracy",
+          "combat",
+          "classes",
+          "raids"
+        ],
+        "description": "GET /app/v1/stats, lifetime stats without KR or any other currency"
+      },
+      "AppClassStats": {
+        "type": "object",
+        "properties": {
+          "class_id": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "level": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "class_id",
+          "name",
+          "score",
+          "level"
+        ],
+        "description": "one class of GET /app/v1/stats"
+      },
+      "AppRaidStats": {
+        "type": "object",
+        "properties": {
+          "map_id": {
+            "type": "number"
+          },
+          "completions": {
+            "type": "number"
+          },
+          "attempts": {
+            "type": "number"
+          },
+          "best_time_ms": {
+            "type": "number"
+          },
+          "ai_kills": {
+            "type": "number"
+          },
+          "boss_kills": {
+            "type": "number"
+          },
+          "deaths": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "map_id",
+          "completions",
+          "attempts",
+          "best_time_ms",
+          "ai_kills",
+          "boss_kills",
+          "deaths"
+        ],
+        "description": "one raid map of GET /app/v1/stats"
+      },
+      "AppPlayer": {
+        "type": "object",
+        "properties": {
+          "sub": {
+            "type": "string",
+            "description": "the player's subject id in this app, the key to store users under"
+          },
+          "name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "number"
+          },
+          "clan": {
+            "type": "string",
+            "description": "the clan tag, absent without a clan"
+          },
+          "premium": {
+            "type": "boolean"
+          },
+          "verified": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sub",
+          "name",
+          "level",
+          "premium",
+          "verified"
+        ],
+        "description": "GET /app/v1/players/by-name/:name, and `data` of GET /app/v1/me"
+      },
+      "AppMe": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AppPlayer"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppScope"
+            },
+            "description": "what this token can use right now"
+          }
+        },
+        "required": [
+          "data",
+          "scopes"
+        ],
+        "description": "GET /app/v1/me, also the userinfo endpoint; `scopes` sits next to `data`"
+      },
+      "AppScope": {
+        "type": "string",
+        "enum": [
+          "profile",
+          "stats:read",
+          "notifications:read",
+          "inventory:read",
+          "inventory:write:skins",
+          "inventory:write:currency",
+          "inventory:write",
+          "trades:read",
+          "trades:write",
+          "market:read",
+          "market:write",
+          "friends:read",
+          "friends:write",
+          "dms:read",
+          "dms:write",
+          "clan:read",
+          "maps:read",
+          "events:subscribe"
+        ],
+        "description": "a scope of an app; everything but `profile` needs approval by the Krunker team"
+      },
+      "AppNotificationCount": {
+        "type": "object",
+        "properties": {
+          "unread": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "unread"
+        ],
+        "description": "GET /app/v1/notifications/count"
+      },
+      "AppNotification": {
+        "type": "object",
+        "properties": {
+          "notification_id": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "followers",
+              "clan",
+              "hub",
+              "inbox"
+            ],
+            "description": "the in-game mail tab"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "link": {
+            "type": "string",
+            "description": "the game's own reference for the mail, often a player or clan name"
+          },
+          "from": {
+            "$ref": "#/components/schemas/AppNotificationSender"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "sent_at": {
+            "type": "string"
+          },
+          "read_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "notification_id",
+          "category",
+          "subject",
+          "text",
+          "from",
+          "read",
+          "sent_at"
+        ],
+        "description": "one row of GET /app/v1/notifications, a Krunker Mail"
+      },
+      "AppNotificationSender": {
+        "type": "object",
+        "properties": {
+          "sub": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "system": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "system"
+        ],
+        "description": "who a mail is from; Krunker itself has no `sub`, a deleted account is `{name: \"Unknown\", system: false}`"
+      },
+      "AppMarketHistoryEntry": {
+        "type": "object",
+        "properties": {
+          "listing_id": {
+            "type": "number"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "sold",
+              "bought"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "cancelled"
+            ]
+          },
+          "skin_index": {
+            "type": "number"
+          },
+          "price": {
+            "type": "number",
+            "description": "KR"
+          },
+          "counterparty": {
+            "$ref": "#/components/schemas/AppPlayerRef",
+            "description": "absent on a cancelled listing"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "listing_id",
+          "side",
+          "status",
+          "skin_index",
+          "price",
+          "at"
+        ],
+        "description": "one row of GET /app/v1/market/history; quick-sells are not in it"
+      },
+      "AppListing": {
+        "type": "object",
+        "properties": {
+          "listing_id": {
+            "type": "number"
+          },
+          "price": {
+            "type": "number",
+            "description": "KR"
+          },
+          "item": {
+            "$ref": "#/components/schemas/AppItem"
+          },
+          "listed_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "listing_id",
+          "price",
+          "item",
+          "listed_at"
+        ],
+        "description": "one row of GET /app/v1/market/listings, an active listing of the player"
+      },
+      "AppMap": {
+        "type": "object",
+        "properties": {
+          "map_id": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "description": "absent when empty"
+          },
+          "votes": {
+            "type": "number"
+          },
+          "plays": {
+            "type": "number"
+          },
+          "playtime_ms": {
+            "type": "number",
+            "description": "the total time players have spent in the map"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "restricted": {
+            "type": "boolean"
+          },
+          "category": {
+            "type": "number"
+          },
+          "updates": {
+            "type": "number"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "map_id",
+          "name",
+          "votes",
+          "plays",
+          "playtime_ms",
+          "featured",
+          "verified",
+          "restricted",
+          "category",
+          "updates",
+          "created_at",
+          "updated_at"
+        ],
+        "description": "one row of GET /app/v1/maps, a published map of the player"
+      },
+      "AppCurrency": {
+        "type": "object",
+        "properties": {
+          "currency_id": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "currency_id",
+          "name",
+          "symbol",
+          "amount"
+        ],
+        "description": "one balance of GET /app/v1/inventory/currencies; 1 is KR, 2 is Junk"
+      },
+      "AppFriend": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "absent while presence is unavailable: unknown, not offline"
+          },
+          "sub": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "since",
+          "sub"
+        ],
+        "description": "one row of GET /app/v1/friends/following and /followers"
+      },
+      "AppDmThread": {
+        "type": "object",
+        "properties": {
+          "peer": {
+            "$ref": "#/components/schemas/AppPlayerRef"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppDm"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "opaque, absent on the last page"
+          }
+        },
+        "required": [
+          "peer",
+          "data"
+        ],
+        "description": "GET /app/v1/dms/:sub, newest first; `peer` sits next to `data`"
+      },
+      "AppDm": {
+        "type": "object",
+        "properties": {
+          "message_id": {
+            "type": "number"
+          },
+          "from_me": {
+            "type": "boolean"
+          },
+          "text": {
+            "type": "string"
+          },
+          "sent_at": {
+            "type": "string"
+          },
+          "read": {
+            "type": "boolean",
+            "description": "whether the recipient has read it"
+          },
+          "via": {
+            "type": "string",
+            "description": "the name of the app it was sent through"
+          }
+        },
+        "required": [
+          "message_id",
+          "from_me",
+          "text",
+          "sent_at",
+          "read"
+        ],
+        "description": "one direct message"
+      },
+      "AppDmConversation": {
+        "type": "object",
+        "properties": {
+          "peer": {
+            "$ref": "#/components/schemas/AppPlayerRef"
+          },
+          "unread": {
+            "type": "number",
+            "description": "messages from the peer the player hasn't read in game"
+          },
+          "last_message": {
+            "$ref": "#/components/schemas/AppDm"
+          }
+        },
+        "required": [
+          "peer",
+          "unread",
+          "last_message"
+        ],
+        "description": "one row of GET /app/v1/dms"
+      },
+      "AppClanMember": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/AppClanRole"
+          },
+          "score": {
+            "type": "number"
+          },
+          "sub": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "role",
+          "score",
+          "sub"
+        ],
+        "description": "one row of GET /app/v1/clan/members"
+      },
+      "AppClanRole": {
+        "type": "string",
+        "enum": [
+          "owner",
+          "commander",
+          "captain",
+          "soldier",
+          "recruit"
+        ],
+        "description": "a member's role, highest first"
+      },
+      "AppClanMembership": {
+        "type": "object",
+        "properties": {
+          "clan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppClan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "$ref": "#/components/schemas/AppClanRole"
+          },
+          "is_officer": {
+            "type": "boolean",
+            "description": "the player can see join applications (the owner or a captain)"
+          }
+        },
+        "required": [
+          "clan"
+        ],
+        "description": "GET /app/v1/clan; only `clan: null` when the player has no clan"
+      },
+      "AppClan": {
+        "type": "object",
+        "properties": {
+          "clan_id": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "rank": {
+            "type": "number"
+          },
+          "logo": {
+            "type": "number"
+          },
+          "banner_color": {
+            "type": "string"
+          },
+          "member_count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "clan_id",
+          "name",
+          "score",
+          "rank",
+          "logo",
+          "banner_color",
+          "member_count"
+        ],
+        "description": "the clan of GET /app/v1/clan; the KR bank is not included"
+      },
+      "AppAction": {
+        "type": "object",
+        "properties": {
+          "action_id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "description": "e.g. `follow.remove`"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AppActionStatus"
+          },
+          "summary": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "what the player was shown"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "decided_at": {
+            "type": "string"
+          },
+          "result_status": {
+            "type": "number",
+            "description": "the http status of the call, once the action has run"
+          },
+          "result": {
+            "description": "the body the direct call would have returned (approved) or its error body (failed)"
+          }
+        },
+        "required": [
+          "action_id",
+          "type",
+          "status",
+          "summary",
+          "created_at",
+          "expires_at"
+        ],
+        "description": "GET /app/v1/actions/:action_id, kept for 24 hours"
+      },
+      "AppActionStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "failed",
+          "denied",
+          "expired"
+        ],
+        "description": "where a per-action approval stands"
       },
       "TradePlayer": {
         "type": "object",

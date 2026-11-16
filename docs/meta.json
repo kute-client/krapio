@@ -1,4 +1,4 @@
 {
     "title": "krapio",
-    "pages": ["index", "developer-api", "game-api", "token-api", "---Library---", "reference"]
+    "pages": ["index", "developer-api", "game-api", "token-api", "app-api", "---Library---", "reference"]
 }

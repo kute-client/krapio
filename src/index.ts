@@ -7,10 +7,11 @@ export { Krunker, type KrunkerOptions } from "./krunker.js";
 export { KrunkerDeveloperApi } from "./developer/index.js";
 export { KrunkerGameApi, type GameApiOptions } from "./game/index.js";
 export { KrunkerTokenApi, TokenSession, type TokenApiOptions } from "./token/index.js";
+export { AppSession, KrunkerAppApi, type AppApiOptions } from "./app/index.js";
 
 export * from "./errors.js";
 export { decodeToken, type TokenClaims } from "./jwt.js";
-export { DEFAULT_BASE_URL, KrunkerClient, type ClientOptions, type FetchLike, type Logger, type QueryValue, type RequestOptions } from "./client.js";
+export { DEFAULT_BASE_URL, KrunkerClient, type ClientOptions, type FetchLike, type FormRequestOptions, type Logger, type QueryValue, type RequestOptions } from "./client.js";
 export { RateLimitTracker } from "./rateLimit.js";
 
 // the resource classes, for the reference and for typing a resource you hand around
@@ -24,6 +25,17 @@ export { MatchApi } from "./developer/resources/match.js";
 export { ModsApi } from "./developer/resources/mods.js";
 export { PlayerApi } from "./developer/resources/player.js";
 export { SkinsApi } from "./developer/resources/skins.js";
+export { AppActionsApi } from "./app/resources/actions.js";
+export { AppClanApi } from "./app/resources/clan.js";
+export { AppDmsApi } from "./app/resources/dms.js";
+export { AppFriendsApi } from "./app/resources/friends.js";
+export { AppInventoryApi } from "./app/resources/inventory.js";
+export { AppMapsApi } from "./app/resources/maps.js";
+export { AppMarketApi } from "./app/resources/market.js";
+export { AppNotificationsApi } from "./app/resources/notifications.js";
+export { AppPlayerApi } from "./app/resources/player.js";
+export { AppStatsApi } from "./app/resources/stats.js";
+export { AppTradesApi } from "./app/resources/trades.js";
 export { PublicClansApi } from "./game/resources/clans.js";
 export { PublicGameApi } from "./game/resources/game.js";
 export { PublicItemsApi } from "./game/resources/items.js";
@@ -82,3 +94,23 @@ export {
 } from "./game/index.js";
 
 export * from "./token/types.js";
+
+export * from "./app/types.js";
+export {
+    KrunkerOAuth,
+    KrunkerOAuthError,
+    OAUTH_AUTHORIZE_URL,
+    createPkce,
+    createState,
+    parseCallback,
+    type AppChallengesQuery,
+    type AppCredentials,
+    type AppNotificationsQuery,
+    type AppPageQuery,
+    type AppTradesQuery,
+    type AuthorizeQuery,
+    type CodeExchange,
+    type OAuthCallback,
+    type OAuthOptions,
+    type Pkce,
+} from "./app/index.js";

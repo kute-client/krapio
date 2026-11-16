@@ -64,6 +64,12 @@ export type RequestOptions = {
     headers?: Record<string, string>;
 };
 
+/** what KrunkerClient.postForm takes: a form body instead of a query */
+export type FormRequestOptions = Omit<RequestOptions, "query"> & {
+    /** sent as application/x-www-form-urlencoded, never logged */
+    form: Record<string, string>;
+};
+
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const isTimeout = (err: unknown): boolean => err instanceof Error && err.name === "TimeoutError";
@@ -79,12 +85,13 @@ async function readBody(res: Response): Promise<unknown> {
     }
 }
 
-// developer api: {error: "text"}, a 404 as plain "Not Found"; keyless gapi: {error: {code, message}}
+// developer api: {error: "text"}, a 404 as plain "Not Found"; keyless gapi and the app api: {error: {code, message}};
+// the oauth endpoints: {error: "code", error_description: "text"}
 const errorMessage = (body: unknown): string | null => {
     if (typeof body === "string") return body.length <= 120 ? body : null;
     if (typeof body !== "object" || body === null) return null;
-    const { error } = body as ApiErrorBody;
-    if (typeof error === "string") return error;
+    const { error, error_description: description } = body as ApiErrorBody;
+    if (typeof error === "string") return typeof description === "string" && description ? `${error}: ${description}` : error;
     if (typeof error === "object" && error !== null && typeof (error as { message?: unknown }).message === "string") return (error as { message: string }).message;
     return null;
 };
@@ -134,7 +141,7 @@ export class KrunkerClient {
 
         for (let attempt = 0; ; attempt++){
             try {
-                return await this.#send<T>(url, options.route, options.headers);
+                return await this.#send<T>(url, options.route, { headers: { Accept: "application/json", ...options.headers } });
             }
             catch (err){
                 const retry = attempt < this.#retries && (err instanceof KrunkerNetworkError || err instanceof KrunkerServerError);
@@ -145,15 +152,32 @@ export class KrunkerClient {
         }
     }
 
-    async #send<T>(url: string, route: string, extra?: Record<string, string>): Promise<T> {
-        const headers: Record<string, string> = { Accept: "application/json", ...extra };
+    /**
+     * POST with a form body, for the oauth endpoints. sent once and never retried: an authorization code and a refresh
+     * token are both spent by the first attempt, and a second use of a refresh token revokes the whole sign-in
+     */
+    async postForm<T>(path: string, options: FormRequestOptions): Promise<T> {
+        const url = this.url(path);
+        const blocked = this.rateLimit.blockedFor(options.route);
+        if (blocked > 0 && blocked <= SHORT_WAIT_S) await sleep(blocked * 1000);
+        else if (blocked > 0) throw new KrunkerRateLimitError(url, blocked, null, true);
+
+        return this.#send<T>(url, options.route, {
+            method: "POST",
+            headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded", ...options.headers },
+            body: new URLSearchParams(options.form).toString(),
+        });
+    }
+
+    async #send<T>(url: string, route: string, init: { method?: string; headers: Record<string, string>; body?: string }): Promise<T> {
+        const headers = { ...init.headers };
         if (this.#apiKey) headers["X-Developer-API-Key"] = this.#apiKey;
         if (this.#userAgent) headers["User-Agent"] = this.#userAgent;
 
         const started = performance.now();
         let res: Response;
         try {
-            res = await this.#fetch(url, { headers, signal: AbortSignal.timeout(this.#timeoutMs) });
+            res = await this.#fetch(url, { ...init, headers, signal: AbortSignal.timeout(this.#timeoutMs) });
         }
         catch (err){
             const timeout = isTimeout(err);

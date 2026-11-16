@@ -595,6 +595,8 @@ export type Skins = {
 /** body of every error reply */
 export type ApiErrorBody = {
     error: string | { code?: string; message?: string };
+    /** only on the oauth endpoints, next to an `error` that is the code */
+    error_description?: string;
     retry_after?: number;
 };
 

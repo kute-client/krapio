@@ -13,7 +13,7 @@ const schemas = (spec.components as Json).schemas as Json;
 /** every route name the resources declare */
 function routes(): string[] {
     const found: string[] = [];
-    for (const tier of ["developer", "game", "token"]){
+    for (const tier of ["developer", "game", "token", "app"]){
         const dir = join(root, "src", tier, "resources");
         for (const file of readdirSync(dir)){
             for (const match of readFileSync(join(dir, file), "utf8").matchAll(/route: "([^"]+)"/g)) found.push(match[1]!);

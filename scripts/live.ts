@@ -1,5 +1,6 @@
 // a dozen reads against the real api, one per tier and host; KRUNKER_API_KEY for the developer tier,
-// KRUNKER_TOKEN (a player's frvr jwt) for the token tier, both optional. bun scripts/live.ts
+// KRUNKER_TOKEN (a player's frvr jwt) for the token tier, KRUNKER_APP_TOKEN (an access token of Login with Krunker,
+// kat_...) for the app tier, all optional. bun scripts/live.ts
 import { Krunker, KrunkerError, KrunkerHttpError, RAID_MAPS } from "../src/index.js";
 
 const krunker = new Krunker({
@@ -46,6 +47,8 @@ await step("game.turf.status", async() => `${(await krunker.game.turf.status()).
 await step("game.matchmaker.pingList", async() => `${Object.keys(await krunker.game.matchmaker.pingList()).length} regions`);
 await step("game.legacy.itemPrices", async() => `${Object.keys(await krunker.game.legacy.itemPrices()).length} items`);
 
+await step("oauth.discovery", async() => `${(await krunker.oauth.discovery()).scopes_supported.length} scopes`);
+
 const token = process.env.KRUNKER_TOKEN;
 if (token){
     const me = krunker.as(token);
@@ -53,6 +56,16 @@ if (token){
     await step("as(token).ranked.dailySpin", async() => `claimed ${(await me.ranked.dailySpin()).claimed}`);
 }
 else console.log("skip token tier, KRUNKER_TOKEN not set");
+
+const appToken = process.env.KRUNKER_APP_TOKEN;
+if (appToken){
+    const app = krunker.app(appToken);
+    await step("app(accessToken).player.me", async() => {
+        const me = await app.player.me();
+        return `level ${me.data.level} with ${me.scopes.join(" ")}`;
+    });
+}
+else console.log("skip app tier, KRUNKER_APP_TOKEN not set");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

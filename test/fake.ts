@@ -3,6 +3,9 @@ import type { FetchLike } from "../src/client.js";
 export type Call = {
     url: string;
     headers: Record<string, string>;
+    /** undefined for a GET, the client sets no method then */
+    method?: string;
+    body?: string;
 };
 
 export type Reply = {
@@ -30,7 +33,7 @@ export function fakeFetch(replies: Reply[] | ((call: Call) => Reply)): Fake {
     return {
         calls,
         fetch: async(url: string, init?: RequestInit): Promise<Response> => {
-            const call = { url, headers: { ...(init?.headers as Record<string, string>) } };
+            const call: Call = { url, headers: { ...(init?.headers as Record<string, string>) }, method: init?.method, body: typeof init?.body === "string" ? init.body : undefined };
             calls.push(call);
             const reply = typeof replies === "function" ? replies(call) : replies[Math.min(calls.length - 1, replies.length - 1)]!;
             if (reply instanceof Error) throw reply;

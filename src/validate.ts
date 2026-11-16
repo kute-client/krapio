@@ -20,6 +20,15 @@ export function text(value: string, what: string): string {
 /** a non-empty name for a path segment, url encoded */
 export const name = (value: string, what: string): string => encodeURIComponent(text(value, what));
 
+const MAX_OPAQUE = 512;
+
+/** an id the api hands out as an opaque string (a subject, an action id), url encoded for a path segment */
+export function opaque(value: string, what: string): string {
+    if (typeof value !== "string" || value.trim().length === 0) throw new KrunkerArgumentError(`${what} must be a non-empty string`);
+    if (value.length > MAX_OPAQUE) throw new KrunkerArgumentError(`${what} is too long (${value.length} > ${MAX_OPAQUE})`);
+    return encodeURIComponent(value);
+}
+
 export function int(value: number, what: string, min: number, max = Number.MAX_SAFE_INTEGER): number {
     if (!Number.isInteger(value) || value < min || value > max){
         throw new KrunkerArgumentError(`${what} must be an integer between ${min} and ${max}, got ${String(value)}`);
